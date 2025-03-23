@@ -232,11 +232,11 @@ if submitted:
         c.save()
         full_pdf.seek(0)
         st.download_button(
-            "📄 Télécharger le PDF comparatif",
-            full_pdf.read(),
-            file_name="rapport_comparatif.pdf",
-            mime="application/pdf"
-        ), file_name="rapport_comparatif.pdf", mime="application/pdf")
+    label="📄 Télécharger le PDF comparatif",
+    data=full_pdf.read(),
+    file_name="rapport_comparatif.pdf",
+    mime="application/pdf"
+), file_name="rapport_comparatif.pdf", mime="application/pdf")
 
     else:
         valeur_par_action_per = (benefice_net * per) / actions
