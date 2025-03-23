@@ -65,7 +65,7 @@ with tab_ratios:
     data=output.getvalue(),
     file_name="Ratios_resultats.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-), file_name="Ratios_resultats.xlsx")
+
 
 with tab_dcf:
     with st.form("formulaire_dcf"):
