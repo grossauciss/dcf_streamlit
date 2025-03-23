@@ -138,7 +138,12 @@ with tab_dcf:
             output_comp = BytesIO()
             with pd.ExcelWriter(output_comp, engine='xlsxwriter') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name="Comparaison")
-            st.download_button("📥 Télécharger le comparatif Excel", output_comp.getvalue(), file_name="comparaison_entreprises.xlsx")
+            st.download_button(
+    label="📥 Télécharger le comparatif Excel",
+    data=output_comp.getvalue(),
+    file_name="comparaison_entreprises.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+), file_name="comparaison_entreprises.xlsx")
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as full_pdf:
                 c = canvas.Canvas(full_pdf.name, pagesize=A4)
