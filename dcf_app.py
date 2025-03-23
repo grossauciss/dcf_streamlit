@@ -4,8 +4,9 @@ import plotly.graph_objects as go
 from io import BytesIO
 import base64
 from jinja2 import Template
-import pdfkit
 import os
+from weasyprint import HTML
+import tempfile
 
 st.set_page_config(page_title="Analyse Financiere", layout="centered")
 
@@ -90,37 +91,24 @@ if submitted:
             resume.to_excel(writer, sheet_name="Résumé", index=False)
         st.download_button("📥 Exporter en Excel", output.getvalue(), file_name="DCF_resultats.xlsx")
 
-        # Génération PDF
-        st.markdown("### 📄 Rapport PDF")
-        html_template = """
-        <html><body style='font-family:Arial;padding:30px;'>
-        <h1 style='color:#1d4ed8;'>Rapport DCF - {{ entreprise }}</h1>
-        <p>Cette analyse utilise la méthode DCF pour estimer la valeur de l'entreprise {{ entreprise }}. Les FCF sont projetés sur 5 ans et actualisés.</p>
-        <h2>Projection des FCF</h2>
-        <table border='1' cellpadding='5'><tr><th>Année</th><th>FCF Projeté</th><th>FCF Actualisé</th></tr>
-        {% for i in range(annees|length) %}<tr><td>{{ annees[i] }}</td><td>{{ fcf_proj[i]|round|int }}</td><td>{{ fcf_actu[i]|round|int }}</td></tr>{% endfor %}
-        </table>
-        <h2>Résultats</h2>
-        <ul><li>Valeur entreprise : {{ ev|round|int }} {{ symbole }}</li>
-        <li>Valeur capitaux propres : {{ equity|round|int }} {{ symbole }}</li>
-        <li>Valeur par action : {{ vpa|round(2) }} {{ symbole }}</li></ul></body></html>
+        # PDF compatible cloud avec WeasyPrint
+        html_content = f"""
+        <html><body style='font-family:Arial;'>
+        <h1>Rapport DCF - {entreprise}</h1>
+        <p>Valeur entreprise : {valeur_entreprise:,.0f} {symbole}</p>
+        <p>Valeur capitaux propres : {valeur_capitaux_propres:,.0f} {symbole}</p>
+        <p>Valeur par action : {valeur_par_action:.2f} {symbole}</p>
+        </body></html>
         """
-        data = {
-            "entreprise": entreprise,
-            "annees": annees,
-            "fcf_proj": fcf_projete,
-            "fcf_actu": fcf_actualise,
-            "ev": valeur_entreprise,
-            "equity": valeur_capitaux_propres,
-            "vpa": valeur_par_action,
-            "symbole": symbole
-        }
-        rendered = Template(html_template).render(**data)
-        try:
-            pdf_bytes = pdfkit.from_string(rendered, False)
-            st.download_button("📄 Télécharger le rapport PDF", data=pdf_bytes, file_name=f"rapport_{entreprise}.pdf", mime="application/pdf")
-        except:
-            st.warning("PDF non disponible sur le cloud. Fonctionne uniquement en local avec wkhtmltopdf installé.")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            HTML(string=html_content).write_pdf(tmp_file.name)
+            tmp_file.seek(0)
+            st.download_button(
+                label="📄 Télécharger le rapport PDF",
+                data=tmp_file.read(),
+                file_name=f"rapport_{entreprise}.pdf",
+                mime="application/pdf"
+            )
 
     else:
         valeur_par_action_per = (benefice_net * per) / actions
