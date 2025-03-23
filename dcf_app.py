@@ -214,24 +214,29 @@ if submitted:
             c.save()
             full_pdf.seek(0)
             if 'entreprises' in st.session_state and st.session_state.entreprises:
-            full_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-            c = canvas.Canvas(full_pdf.name, pagesize=A4)
-            c.setFont("Helvetica-Bold", 16)
-            c.drawString(2 * cm, 27 * cm, "Comparaison multi-entreprises")
-            y = 25.5 * cm
-            c.setFont("Helvetica", 12)
-            for row in df_comp.itertuples(index=False):
-                try:
-                    c.drawString(2 * cm, y, f"{row.Entreprise}: VPA {row._1:.2f} {symbole}, Cours {row._2:.2f}, Marge {row._3:.1f}%")
-                except Exception as e:
-                    c.drawString(2 * cm, y, f"[Erreur données]")
-                y -= 0.7 * cm
-                if y < 3 * cm:
-                    c.showPage()
-                    y = 27 * cm
-            c.save()
-            full_pdf.seek(0)
-            st.download_button("📄 Télécharger le PDF comparatif", full_pdf.read(), file_name="rapport_comparatif.pdf", mime="application/pdf")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as full_pdf:
+        c = canvas.Canvas(full_pdf.name, pagesize=A4)
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(2 * cm, 27 * cm, "Comparaison multi-entreprises")
+        y = 25.5 * cm
+        c.setFont("Helvetica", 12)
+        for row in df_comp.itertuples(index=False):
+            try:
+                c.drawString(2 * cm, y, f"{row.Entreprise}: VPA {row._1:.2f} {symbole}, Cours {row._2:.2f}, Marge {row._3:.1f}%")
+            except Exception:
+                c.drawString(2 * cm, y, "[Erreur données]")
+            y -= 0.7 * cm
+            if y < 3 * cm:
+                c.showPage()
+                y = 27 * cm
+        c.save()
+        full_pdf.seek(0)
+        st.download_button(
+            "📄 Télécharger le PDF comparatif",
+            full_pdf.read(),
+            file_name="rapport_comparatif.pdf",
+            mime="application/pdf"
+        ), file_name="rapport_comparatif.pdf", mime="application/pdf")
 
     else:
         valeur_par_action_per = (benefice_net * per) / actions
