@@ -60,7 +60,12 @@ with tab_ratios:
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False, sheet_name="Comparatif Multiples")
-        st.download_button("📥 Exporter en Excel", output.getvalue(), file_name="Ratios_resultats.xlsx")
+        st.download_button(
+    label="📥 Exporter en Excel",
+    data=output.getvalue(),
+    file_name="Ratios_resultats.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+), file_name="Ratios_resultats.xlsx")
 
 with tab_dcf:
     with st.form("formulaire_dcf"):
@@ -143,6 +148,9 @@ with tab_dcf:
     data=output_comp.getvalue(),
     file_name="comparaison_entreprises.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+),
+    file_name="comparaison_entreprises.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 ), file_name="comparaison_entreprises.xlsx")
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as full_pdf:
@@ -163,8 +171,11 @@ with tab_dcf:
                 c.save()
                 full_pdf.seek(0)
                 st.download_button(
-                    label="📄 Télécharger le PDF comparatif",
-                    data=full_pdf.read(),
+    label="📄 Télécharger le PDF comparatif",
+    data=full_pdf.read(),
+    file_name="rapport_comparatif.pdf",
+    mime="application/pdf"
+),
                     file_name="rapport_comparatif.pdf",
                     mime="application/pdf"
                 )"📥 Télécharger le comparatif Excel", output_comp.getvalue(), file_name="comparaison_entreprises.xlsx")
