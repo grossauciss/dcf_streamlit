@@ -20,19 +20,51 @@ with col2:
 
 st.markdown("---")
 
-tabs = st.tabs(["🔍 Analyse DCF", "📊 Analyse par Ratios"])
-with tabs[0]:
-    methode = "Analyse DCF"
-with tabs[1]:
-    methode = "Analyse par Ratios"
+tab_dcf, tab_ratios = st.tabs(["🔍 Analyse DCF", "📊 Analyse par Ratios"])
 
 devise = st.selectbox("Devise", ["€", "$", "CHF", "£"])
 symbole = {"€": "€", "$": "$", "CHF": "CHF", "£": "£"}[devise]
 
-with st.form("formulaire"):
-    entreprise = st.text_input("Nom de l'entreprise", "Entreprise X")
+with tab_ratios:
+    with st.form("formulaire_ratios"):
+        entreprise = st.text_input("Nom de l'entreprise (Ratios)", "Entreprise X")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            benefice_net = st.number_input(f"Bénéfice net annuel ({symbole})", value=2500000000.0)
+            per = st.number_input("PER moyen", value=15.0)
+        with col2:
+            ebitda = st.number_input(f"EBITDA ({symbole})", value=5000000000.0)
+            ev_ebitda = st.number_input("EV/EBITDA moyen", value=12.0)
+        with col3:
+            dette_nette = st.number_input(f"Dette nette ({symbole})", value=-2000000000.0)
+            actions = st.number_input("Nombre d'actions", value=428000000.0)
+        submitted_ratios = st.form_submit_button("Lancer l'analyse Ratios")
 
-    if methode == "Analyse DCF":
+    if submitted_ratios:
+        valeur_par_action_per = (benefice_net * per) / actions
+        valeur_entreprise_ebitda = ebitda * ev_ebitda
+        valeur_capitaux_propres = valeur_entreprise_ebitda + dette_nette
+        valeur_par_action_ebitda = valeur_capitaux_propres / actions
+
+        st.success(f"✅ Résultats par multiples pour {entreprise}")
+        st.metric("Valeur par action (PER)", f"{valeur_par_action_per:.2f} {symbole}")
+        st.metric("Valeur par action (EV/EBITDA)", f"{valeur_par_action_ebitda:.2f} {symbole}")
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=["PER"], y=[valeur_par_action_per], name="PER"))
+        fig.add_trace(go.Bar(x=["EV/EBITDA"], y=[valeur_par_action_ebitda], name="EV/EBITDA"))
+        fig.update_layout(title="Comparatif des valorisations", yaxis_title=f"{symbole} par action", barmode='group')
+        st.plotly_chart(fig)
+
+        df = pd.DataFrame({"Méthode": ["PER", "EV/EBITDA"], "Valeur par action": [valeur_par_action_per, valeur_par_action_ebitda]})
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name="Comparatif Multiples")
+        st.download_button("📥 Exporter en Excel", output.getvalue(), file_name="Ratios_resultats.xlsx")
+
+with tab_dcf:
+    with st.form("formulaire_dcf"):
+        entreprise = st.text_input("Nom de l'entreprise", "Entreprise X")
         col1, col2, col3 = st.columns(3)
         with col1:
             fcf_initial = st.number_input(f"FCF de départ ({symbole})", value=2900000000.0)
@@ -44,28 +76,12 @@ with st.form("formulaire"):
             dette_nette = st.number_input(f"Dette nette ({symbole})", value=-3000000000.0)
             actions = st.number_input("Nombre d'actions", value=428000000.0)
         cours_reel = st.number_input("Cours actuel de l'action", value=130.0)
+        submitted_dcf = st.form_submit_button("Lancer l'analyse DCF")
 
-    else:
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            benefice_net = st.number_input(f"Bénéfice net annuel ({symbole})", value=2500000000.0)
-            per = st.number_input("PER moyen", value=15.0)
-        with col2:
-            ebitda = st.number_input(f"EBITDA ({symbole})", value=5000000000.0)
-            ev_ebitda = st.number_input("EV/EBITDA moyen", value=12.0)
-        with col3:
-            dette_nette = st.number_input(f"Dette nette ({symbole})", value=-2000000000.0)
-            actions = st.number_input("Nombre d'actions", value=428000000.0)
+    if submitted_dcf:
+        if 'entreprises' not in st.session_state:
+            st.session_state.entreprises = []
 
-    submitted = st.form_submit_button("Lancer l'analyse")
-
-if submitted:
-    if 'entreprises' not in st.session_state:
-        st.session_state.entreprises = []
-
-    resultats_comparables = []
-
-    if methode == "Analyse DCF":
         annees = [2025 + i for i in range(5)]
         fcf_projete = [fcf_initial * (1 + croissance) ** i for i in range(1, 6)]
         fcf_actualise = [fcf / (1 + wacc) ** i for i, fcf in enumerate(fcf_projete, 1)]
@@ -101,29 +117,52 @@ if submitted:
         fig.update_layout(title="Projection des FCF", xaxis_title="Année", yaxis_title=f"Montant ({symbole})")
         st.plotly_chart(fig)
 
-    # --- EXPORT COMPARATIF MULTI-ENTREPRISES ---
-    if st.session_state.entreprises:
-        st.markdown("### 📋 Comparaison entre entreprises")
-        df_comp = pd.DataFrame([
-            {
-                "Entreprise": e["nom"],
-                "Valeur par action": e["valeur_par_action"],
-                "Cours actuel": e["cours_reel"],
-                "Marge de sécurité (%)": ((e["valeur_par_action"] - e["cours_reel"]) / e["cours_reel"]) * 100
-            }
-            for e in st.session_state.entreprises
-        ])
+        if st.session_state.entreprises:
+            st.markdown("### 📋 Comparaison entre entreprises")
+            df_comp = pd.DataFrame([
+                {
+                    "Entreprise": e["nom"],
+                    "Valeur par action": e["valeur_par_action"],
+                    "Cours actuel": e["cours_reel"],
+                    "Marge de sécurité (%)": ((e["valeur_par_action"] - e["cours_reel"]) / e["cours_reel"]) * 100
+                }
+                for e in st.session_state.entreprises
+            ])
 
-        st.dataframe(df_comp.style.format({
-            "Valeur par action": "{:.2f}",
-            "Cours actuel": "{:.2f}",
-            "Marge de sécurité (%)": "{:.1f}"
-        }))
+            st.dataframe(df_comp.style.format({
+                "Valeur par action": "{:.2f}",
+                "Cours actuel": "{:.2f}",
+                "Marge de sécurité (%)": "{:.1f}"
+            }))
 
-        output_comp = BytesIO()
-        with pd.ExcelWriter(output_comp, engine='xlsxwriter') as writer:
-            df_comp.to_excel(writer, index=False, sheet_name="Comparaison")
-        st.download_button("📥 Télécharger le comparatif Excel", output_comp.getvalue(), file_name="comparaison_entreprises.xlsx")
+            output_comp = BytesIO()
+            with pd.ExcelWriter(output_comp, engine='xlsxwriter') as writer:
+                df_comp.to_excel(writer, index=False, sheet_name="Comparaison")
+            st.download_button("📥 Télécharger le comparatif Excel", output_comp.getvalue(), file_name="comparaison_entreprises.xlsx")
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as full_pdf:
+                c = canvas.Canvas(full_pdf.name, pagesize=A4)
+                c.setFont("Helvetica-Bold", 16)
+                c.drawString(2 * cm, 27 * cm, "Comparaison multi-entreprises")
+                y = 25.5 * cm
+                c.setFont("Helvetica", 12)
+                for row in df_comp.itertuples(index=False):
+                    try:
+                        c.drawString(2 * cm, y, f"{row.Entreprise}: VPA {row._1:.2f} {symbole}, Cours {row._2:.2f}, Marge {row._3:.1f}%")
+                    except Exception:
+                        c.drawString(2 * cm, y, "[Erreur données]")
+                    y -= 0.7 * cm
+                    if y < 3 * cm:
+                        c.showPage()
+                        y = 27 * cm
+                c.save()
+                full_pdf.seek(0)
+                st.download_button(
+                    label="📄 Télécharger le PDF comparatif",
+                    data=full_pdf.read(),
+                    file_name="rapport_comparatif.pdf",
+                    mime="application/pdf"
+                )"📥 Télécharger le comparatif Excel", output_comp.getvalue(), file_name="comparaison_entreprises.xlsx")
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as full_pdf:
             c = canvas.Canvas(full_pdf.name, pagesize=A4)
