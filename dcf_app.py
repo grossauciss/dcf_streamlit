@@ -178,7 +178,6 @@ with tab_dcf:
 ),
                     file_name="rapport_comparatif.pdf",
                     mime="application/pdf"
-                )"📥 Télécharger le comparatif Excel", output_comp.getvalue(), file_name="comparaison_entreprises.xlsx")
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as full_pdf:
             c = canvas.Canvas(full_pdf.name, pagesize=A4)
