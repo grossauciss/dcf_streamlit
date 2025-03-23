@@ -3,3 +3,4 @@ plotly
 pandas
 jinja2
 pdfkit
+xlsxwriter
