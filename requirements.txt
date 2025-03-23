@@ -7,3 +7,4 @@ xlsxwriter
 weasyprint
 html5lib
 tinycss2
+reportlab

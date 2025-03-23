@@ -5,7 +5,9 @@ from io import BytesIO
 import base64
 from jinja2 import Template
 import os
-from weasyprint import HTML
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import cm
 import tempfile
 
 st.set_page_config(page_title="Analyse Financiere", layout="centered")
@@ -13,7 +15,7 @@ st.set_page_config(page_title="Analyse Financiere", layout="centered")
 # --- HEADER ---
 col1, col2 = st.columns([1, 8])
 with col1:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Streamlit_logo_mark.svg/120px-Streamlit_logo_mark.svg.png", width=50)
+    st.image("https://upload.wikedia.org/wikipedia/commons/thumb/1/10/Streamlit_logo_mark.svg/120px-Streamlit_logo_mark.svg.png", width=50)
 with col2:
     st.markdown("<h1 style='margin-bottom:0;'>📊 DCF & Ratios Analyzer</h1>", unsafe_allow_html=True)
     st.caption("Une app simple pour estimer la valeur d'une entreprise par différentes méthodes")
@@ -91,24 +93,25 @@ if submitted:
             resume.to_excel(writer, sheet_name="Résumé", index=False)
         st.download_button("📥 Exporter en Excel", output.getvalue(), file_name="DCF_resultats.xlsx")
 
-        # PDF compatible cloud avec WeasyPrint
-        html_content = f"""
-        <html><body style='font-family:Arial;'>
-        <h1>Rapport DCF - {entreprise}</h1>
-        <p>Valeur entreprise : {valeur_entreprise:,.0f} {symbole}</p>
-        <p>Valeur capitaux propres : {valeur_capitaux_propres:,.0f} {symbole}</p>
-        <p>Valeur par action : {valeur_par_action:.2f} {symbole}</p>
-        </body></html>
-        """
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            HTML(string=html_content).write_pdf(tmp_file.name)
-            tmp_file.seek(0)
-            st.download_button(
-                label="📄 Télécharger le rapport PDF",
-                data=tmp_file.read(),
-                file_name=f"rapport_{entreprise}.pdf",
-                mime="application/pdf"
-            )
+        # PDF avec ReportLab (compatible cloud)
+        st.markdown("### 📄 Rapport PDF")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
+            c = canvas.Canvas(tmp_pdf.name, pagesize=A4)
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(2 * cm, 27 * cm, f"Rapport DCF - {entreprise}")
+            c.setFont("Helvetica", 12)
+            c.drawString(2 * cm, 25.5 * cm, f"Valeur de l'entreprise : {valeur_entreprise:,.0f} {symbole}")
+            c.drawString(2 * cm, 24.8 * cm, f"Valeur des capitaux propres : {valeur_capitaux_propres:,.0f} {symbole}")
+            c.drawString(2 * cm, 24.1 * cm, f"Valeur par action : {valeur_par_action:.2f} {symbole}")
+            c.drawString(2 * cm, 22.5 * cm, "Projection des flux de trésorerie :")
+            y = 21.5 * cm
+            for i in range(len(annees)):
+                c.drawString(2 * cm, y, f"{annees[i]} : FCF projeté {fcf_projete[i]:,.0f}, actualisé {fcf_actualise[i]:,.0f}")
+                y -= 0.6 * cm
+            c.showPage()
+            c.save()
+            tmp_pdf.seek(0)
+            st.download_button("📄 Télécharger le rapport PDF", tmp_pdf.read(), file_name=f"rapport_{entreprise}.pdf", mime="application/pdf")
 
     else:
         valeur_par_action_per = (benefice_net * per) / actions
