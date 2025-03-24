@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import tempfile
 import io
@@ -12,9 +13,9 @@ from reportlab.lib.utils import ImageReader
 from reportlab.lib import colors
 
 st.set_page_config(page_title="Analyse Financière Complète", layout="centered")
-st.title("📊 Analyse Financière avec PDF & Graphique Cours (100% Cloud Compatible)")
+st.title("📊 Analyse Financière - Tout en un")
 
-def generer_graphique_cours(ticker):
+def generer_graphique_cours_png(ticker):
     df = yf.download(ticker, period="10y")
     df["MA200"] = df["Close"].rolling(window=200).mean()
     fig, ax = plt.subplots(figsize=(8, 4))
@@ -92,10 +93,43 @@ if ticker:
             commentaire += "surévaluée."
         commentaire += f" Score global : {score_final}/100."
 
-        graphique_bytes = generer_graphique_cours(ticker)
+        st.subheader("📈 FCF projeté")
+        df_fcf = pd.DataFrame(fcf_proj, index=[f"Année {i}" for i in range(1, 6)], columns=["FCF Projeté"])
+        st.line_chart(df_fcf)
 
-        st.subheader("📄 Résumé PDF")
+        st.subheader("🧭 Score de valorisation")
+        fig_score = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=score_final,
+            title={'text': "Score de Valorisation"},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "darkblue"},
+                'steps': [
+                    {'range': [0, 30], 'color': "red"},
+                    {'range': [30, 50], 'color': "orange"},
+                    {'range': [50, 70], 'color': "yellow"},
+                    {'range': [70, 85], 'color': "lightgreen"},
+                    {'range': [85, 100], 'color': "green"},
+                ],
+            }
+        ))
+        st.plotly_chart(fig_score)
+
+        st.subheader("📉 Cours sur 10 ans + MA 200")
+        df = yf.download(ticker, period="10y")
+        df["MA200"] = df["Close"].rolling(window=200).mean()
+        fig_cours = go.Figure()
+        fig_cours.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name="Cours"))
+        fig_cours.add_trace(go.Scatter(x=df.index, y=df["MA200"], mode="lines", name="MA 200j", line=dict(color="orange")))
+        fig_cours.update_layout(title="📈 Historique du cours", xaxis_title="Date", yaxis_title="Cours", template="plotly_dark")
+        st.plotly_chart(fig_cours)
+
+        graphique_bytes = generer_graphique_cours_png(ticker)
+
+        st.subheader("📝 Résumé automatique")
         st.markdown(commentaire)
+
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
         c = canvas.Canvas(temp_file.name, pagesize=A4)
         width, height = A4
@@ -124,7 +158,6 @@ if ticker:
         c.setFont("Helvetica-Oblique", 8)
         c.setFillColor(colors.grey)
         c.drawString(50, 40, f"Généré le {datetime.now().strftime('%d/%m/%Y')}")
-
         c.save()
 
         with open(temp_file.name, "rb") as file:
