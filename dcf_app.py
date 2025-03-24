@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import yfinance as yf
 
 st.set_page_config(page_title="Analyse Financière Complète", layout="centered")
-st.title("📊 Analyse Financière : DCF, Ratios, Score & Graphes")
+st.title("📊 Analyse Financière : DCF, Ratios, Score & Cours")
 
 devise = st.selectbox("Devise", ["€", "$", "CHF", "£"])
 symbole = {"€": "€", "$": "$", "CHF": "CHF", "£": "£"}[devise]
@@ -20,7 +20,8 @@ if ticker_input:
     try:
         ticker = yf.Ticker(ticker_input)
         info = ticker.info
-        hist = ticker.history(period="1y")
+        hist_10y = ticker.history(period="10y")
+        hist_10y["SMA_200"] = hist_10y["Close"].rolling(window=200).mean()
         fcf = info.get("freeCashflow")
         ebitda = info.get("ebitda")
         debt = info.get("totalDebt")
@@ -32,13 +33,14 @@ if ticker_input:
     except:
         st.error("Erreur lors de la récupération des données.")
 
-# --- Graphique du cours historique
-if 'hist' in locals() and not hist.empty:
-    st.subheader("📈 Évolution du cours boursier (1 an)")
-    fig_price = go.Figure()
-    fig_price.add_trace(go.Scatter(x=hist.index, y=hist["Close"], name="Cours de clôture"))
-    fig_price.update_layout(yaxis_title=f"Cours ({symbole})", xaxis_title="Date")
-    st.plotly_chart(fig_price, use_container_width=True)
+# --- Graphique du cours sur 10 ans + moyenne mobile
+if 'hist_10y' in locals() and not hist_10y.empty:
+    st.subheader("📈 Cours de l'action sur 10 ans (avec moyenne mobile 200 jours)")
+    fig_long = go.Figure()
+    fig_long.add_trace(go.Scatter(x=hist_10y.index, y=hist_10y["Close"], name="Cours de clôture"))
+    fig_long.add_trace(go.Scatter(x=hist_10y.index, y=hist_10y["SMA_200"], name="Moyenne mobile 200j", line=dict(dash="dash")))
+    fig_long.update_layout(title="Cours boursier sur 10 ans", xaxis_title="Date", yaxis_title=f"Cours ({symbole})")
+    st.plotly_chart(fig_long, use_container_width=True)
 
 # --- Mini dashboard de ratios
 if info:
