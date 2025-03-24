@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import yfinance as yf
 
 st.set_page_config(page_title="Analyse Financière Complète", layout="centered")
-st.title("📊 Analyse Financière : DCF, Ratios & Score de Valorisation")
+st.title("📊 Analyse Financière : DCF, Ratios, Score & Graphes")
 
 devise = st.selectbox("Devise", ["€", "$", "CHF", "£"])
 symbole = {"€": "€", "$": "$", "CHF": "CHF", "£": "£"}[devise]
@@ -14,11 +14,13 @@ ticker_input = st.text_input("🔍 Ticker boursier", "AAPL")
 fcf = ebitda = debt = shares = price = net_income = None
 valeurs = {}
 cours = 0
+info = {}
 
 if ticker_input:
     try:
         ticker = yf.Ticker(ticker_input)
         info = ticker.info
+        hist = ticker.history(period="1y")
         fcf = info.get("freeCashflow")
         ebitda = info.get("ebitda")
         debt = info.get("totalDebt")
@@ -29,6 +31,28 @@ if ticker_input:
         st.success(f"Données récupérées pour {info.get('longName') or ticker_input}")
     except:
         st.error("Erreur lors de la récupération des données.")
+
+# --- Graphique du cours historique
+if 'hist' in locals() and not hist.empty:
+    st.subheader("📈 Évolution du cours boursier (1 an)")
+    fig_price = go.Figure()
+    fig_price.add_trace(go.Scatter(x=hist.index, y=hist["Close"], name="Cours de clôture"))
+    fig_price.update_layout(yaxis_title=f"Cours ({symbole})", xaxis_title="Date")
+    st.plotly_chart(fig_price, use_container_width=True)
+
+# --- Mini dashboard de ratios
+if info:
+    st.subheader("📊 Ratios Financiers Clés")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("ROE (%)", round(info.get("returnOnEquity", 0)*100, 2))
+        st.metric("Marge nette (%)", round(info.get("netMargins", 0)*100, 2))
+    with col2:
+        st.metric("Endettement (%)", round(info.get("debtToEquity", 0), 2))
+        st.metric("Croissance CA (%)", round(info.get("revenueGrowth", 0)*100, 2))
+    with col3:
+        st.metric("P/B", round(info.get("priceToBook", 0), 2))
+        st.metric("ROA (%)", round(info.get("returnOnAssets", 0)*100, 2))
 
 tab_dcf, tab_ratios = st.tabs(["🔍 Analyse DCF", "📊 Analyse par Ratios"])
 
