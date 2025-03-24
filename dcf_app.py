@@ -3,9 +3,12 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import yfinance as yf
+import tempfile
+from fpdf import FPDF
+from datetime import datetime
 
-st.set_page_config(page_title="Analyse Financière Complète", layout="centered")
-st.title("📊 Analyse Financière : DCF, Ratios, Score & Commentaire")
+st.set_page_config(page_title="Analyse Financière PDF", layout="centered")
+st.title("📊 Analyse Financière avec Export PDF")
 
 devise = st.selectbox("Devise", ["€", "$", "CHF", "£"])
 symbole = {"€": "€", "$": "$", "CHF": "CHF", "£": "£"}[devise]
@@ -15,6 +18,7 @@ valeurs = {}
 fcf = ebitda = debt = shares = price = net_income = cours = score_final = 0
 info = {}
 
+# Récupération des données
 if ticker_input:
     try:
         ticker = yf.Ticker(ticker_input)
@@ -30,52 +34,40 @@ if ticker_input:
     except:
         st.error("Erreur lors de la récupération des données.")
 
-tab_dcf, tab_ratios = st.tabs(["🔍 Analyse DCF", "📊 Analyse par Ratios"])
+# Formulaire de calcul
+with st.form("formulaire"):
+    fcf_input = st.number_input("FCF initial", value=fcf or 0.0)
+    croissance = st.number_input("Croissance (%)", value=10.0) / 100
+    wacc = st.number_input("WACC (%)", value=8.0) / 100
+    croissance_term = st.number_input("Croissance terminale (%)", value=2.5) / 100
+    dette = st.number_input("Dette nette", value=-(debt or 0.0))
+    nb_actions = st.number_input("Nombre d'actions", value=shares or 1.0)
+    benefice = st.number_input("Bénéfice net", value=net_income or 0.0)
+    per = st.number_input("PER", value=15.0)
+    ebitda_input = st.number_input("EBITDA", value=ebitda or 0.0)
+    ev_ebitda = st.number_input("EV/EBITDA", value=12.0)
+    submit = st.form_submit_button("Calculer")
 
-# Analyse DCF
-with tab_dcf:
-    with st.form("form_dcf"):
-        fcf_input = st.number_input("FCF initial", value=fcf or 0.0)
-        croissance = st.number_input("Croissance (%)", value=10.0) / 100
-        wacc = st.number_input("WACC (%)", value=8.0) / 100
-        croissance_term = st.number_input("Croissance terminale (%)", value=2.5) / 100
-        dette = st.number_input("Dette nette", value=-(debt or 0.0))
-        nb_actions = st.number_input("Nombre d'actions", value=shares or 1.0)
-        cours = st.number_input("Cours actuel", value=price or 0.0)
-        submit_dcf = st.form_submit_button("Lancer l'analyse DCF")
+# Résultats et score
+if submit:
+    valeur_per = (benefice * per) / nb_actions
+    valeur_ebitda = ((ebitda_input * ev_ebitda) + dette) / nb_actions
 
-    if submit_dcf:
-        fcf_proj = [fcf_input * (1 + croissance) ** i for i in range(1, 6)]
-        fcf_actu = [fcf / (1 + wacc) ** i for i, fcf in enumerate(fcf_proj, 1)]
-        valeur_terminale = fcf_proj[-1] * (1 + croissance_term) / (wacc - croissance_term)
-        valeur_term_actu = valeur_terminale / (1 + wacc) ** 5
-        valeur_ent = sum(fcf_actu) + valeur_term_actu
-        capitaux = valeur_ent + dette
-        valeur_dcf = capitaux / nb_actions
-        valeurs["DCF"] = valeur_dcf
-        st.metric("Valeur par action (DCF)", f"{valeur_dcf:.2f} {symbole}")
+    fcf_proj = [fcf_input * (1 + croissance) ** i for i in range(1, 6)]
+    fcf_actu = [fcf / (1 + wacc) ** i for i, fcf in enumerate(fcf_proj, 1)]
+    valeur_terminale = fcf_proj[-1] * (1 + croissance_term) / (wacc - croissance_term)
+    valeur_term_actu = valeur_terminale / (1 + wacc) ** 5
+    valeur_ent = sum(fcf_actu) + valeur_term_actu
+    capitaux = valeur_ent + dette
+    valeur_dcf = capitaux / nb_actions
 
-# Analyse par Ratios
-with tab_ratios:
-    with st.form("form_ratios"):
-        benefice = st.number_input("Bénéfice net", value=net_income or 0.0)
-        per = st.number_input("PER", value=15.0)
-        ebitda_input = st.number_input("EBITDA", value=ebitda or 0.0)
-        ev_ebitda = st.number_input("EV/EBITDA", value=12.0)
-        nb_actions_ratios = st.number_input("Nombre d'actions (ratios)", value=shares or 1.0)
-        dette_ratios = st.number_input("Dette nette (ratios)", value=-(debt or 0.0))
-        submit_ratios = st.form_submit_button("Lancer l'analyse Ratios")
+    valeurs = {
+        "DCF": valeur_dcf,
+        "PER": valeur_per,
+        "EV/EBITDA": valeur_ebitda
+    }
 
-    if submit_ratios:
-        valeur_per = (benefice * per) / nb_actions_ratios
-        valeur_ebitda = ((ebitda_input * ev_ebitda) + dette_ratios) / nb_actions_ratios
-        valeurs["PER"] = valeur_per
-        valeurs["EV/EBITDA"] = valeur_ebitda
-        st.metric("Valeur par action (PER)", f"{valeur_per:.2f} {symbole}")
-        st.metric("Valeur par action (EV/EBITDA)", f"{valeur_ebitda:.2f} {symbole}")
-
-# Score et commentaire
-if valeurs and cours:
+    # Score
     scores = []
     for methode, val in valeurs.items():
         marge = (val - cours) / cours * 100
@@ -83,48 +75,48 @@ if valeurs and cours:
         scores.append(score)
     score_final = round(sum(scores) / len(scores), 1)
 
-    st.subheader("🧠 Score de Valorisation")
-    st.metric("Score global", f"{score_final} / 100")
-
+    # Résumé
+    st.subheader("🧠 Résumé exécutif")
+    commentaire = "L'entreprise semble "
     if score_final >= 85:
-        st.success("🔥 Très sous-valorisée")
+        commentaire += "**très sous-valorisée**."
     elif score_final >= 70:
-        st.success("✅ Sous-valorisée")
+        commentaire += "**sous-valorisée**."
     elif score_final >= 50:
-        st.info("🟡 Équitable")
-    elif score_final >= 30:
-        st.warning("🔻 Légèrement surévaluée")
+        commentaire += "**correctement valorisée**."
     else:
-        st.error("🔴 Surévaluée")
+        commentaire += "**surévaluée**."
+    commentaire += f" Score global : **{score_final}/100**."
+    st.markdown(commentaire)
 
-    st.subheader("📝 Interprétation automatique")
-    try:
-        roe = info.get("returnOnEquity", 0) * 100
-        net_margin = info.get("netMargins", 0) * 100
-        debt_ratio = info.get("debtToEquity", 0)
-        rev_growth = info.get("revenueGrowth", 0) * 100
+    # PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Analyse de valorisation financière", ln=1, align="C")
 
-        commentaire = "L'entreprise semble "
-        if score_final >= 85:
-            commentaire += "**très sous-valorisée** selon les différentes approches."
-        elif score_final >= 70:
-            commentaire += "**sous-valorisée** selon la plupart des méthodes."
-        elif score_final >= 50:
-            commentaire += "**correctement valorisée**, avec un potentiel modéré."
-        else:
-            commentaire += "**surévaluée** selon l'analyse actuelle."
+    pdf.set_font("Arial", "", 12)
+    pdf.ln(5)
+    pdf.multi_cell(0, 10, commentaire)
 
-        commentaire += f" Le score global atteint **{score_final}/100**."
+    pdf.ln(5)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "Synthèse des méthodes :", ln=1)
+    pdf.set_font("Arial", "", 12)
+    for k, v in valeurs.items():
+        pdf.cell(0, 10, f"{k} : {v:.2f} {symbole}", ln=1)
 
-        if roe > 15:
-            commentaire += f" La rentabilité est solide (ROE : {roe:.1f}%)."
-        if net_margin > 10:
-            commentaire += f" La marge nette est élevée ({net_margin:.1f}%)."
-        if debt_ratio > 100:
-            commentaire += f" ⚠️ Le taux d’endettement est important ({debt_ratio:.0f}%)."
-        if rev_growth > 5:
-            commentaire += f" 📈 Croissance du CA : {rev_growth:.1f}%."
+    pdf.ln(5)
+    pdf.set_font("Arial", "I", 10)
+    pdf.cell(0, 10, f"Généré le {datetime.today().strftime('%d/%m/%Y')}", ln=1)
 
-        st.markdown(commentaire)
-    except:
-        st.warning("⚠️ Résumé automatique non disponible.")
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(temp_file.name)
+
+    with open(temp_file.name, "rb") as file:
+        btn = st.download_button(
+            label="📥 Télécharger le rapport PDF",
+            data=file,
+            file_name="analyse_valorisation.pdf",
+            mime="application/pdf"
+        )
