@@ -1,35 +1,33 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from io import BytesIO
-from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 import tempfile
 
 st.set_page_config(page_title="Analyse Financière", layout="centered")
 
-st.title("📊 DCF & Ratios Analyzer")
-st.caption("Estimez la valeur d'une entreprise avec différentes méthodes.")
-
+st.title("📊 Analyse DCF & Ratios")
 devise = st.selectbox("Devise", ["€", "$", "CHF", "£"])
 symbole = {"€": "€", "$": "$", "CHF": "CHF", "£": "£"}[devise]
 
 tab_dcf, tab_ratios = st.tabs(["🔍 Analyse DCF", "📊 Analyse par Ratios"])
 
+# --- Onglet DCF ---
 with tab_dcf:
-    with st.form("formulaire_dcf"):
+    with st.form("form_dcf"):
         entreprise = st.text_input("Nom de l'entreprise", "Entreprise X")
         col1, col2, col3 = st.columns(3)
         with col1:
-            fcf_initial = st.number_input(f"FCF de départ ({symbole})", value=2900000000.0)
+            fcf_initial = st.number_input("FCF de départ", value=2900000000.0)
             croissance = st.number_input("Croissance FCF (%)", value=10.0) / 100
         with col2:
             wacc = st.number_input("WACC (%)", value=8.0) / 100
             croissance_terminale = st.number_input("Croissance terminale (%)", value=2.5) / 100
         with col3:
-            dette_nette = st.number_input(f"Dette nette ({symbole})", value=-3000000000.0)
+            dette_nette = st.number_input("Dette nette", value=-3000000000.0)
             actions = st.number_input("Nombre d'actions", value=428000000.0)
         cours_reel = st.number_input("Cours actuel de l'action", value=130.0)
         submitted_dcf = st.form_submit_button("Lancer l'analyse DCF")
@@ -93,3 +91,48 @@ with tab_dcf:
                 file_name=f"rapport_{entreprise}.pdf",
                 mime="application/pdf"
             )
+
+# --- Onglet Ratios ---
+with tab_ratios:
+    with st.form("form_ratios"):
+        entreprise = st.text_input("Nom de l'entreprise (Ratios)", "Entreprise X")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            benefice_net = st.number_input("Bénéfice net annuel", value=2500000000.0)
+            per = st.number_input("PER moyen", value=15.0)
+        with col2:
+            ebitda = st.number_input("EBITDA", value=5000000000.0)
+            ev_ebitda = st.number_input("EV/EBITDA moyen", value=12.0)
+        with col3:
+            dette_nette = st.number_input("Dette nette", value=-2000000000.0)
+            actions = st.number_input("Nombre d'actions", value=428000000.0)
+        submitted_ratios = st.form_submit_button("Lancer l'analyse Ratios")
+
+    if submitted_ratios:
+        valeur_par_action_per = (benefice_net * per) / actions
+        valeur_entreprise_ebitda = ebitda * ev_ebitda
+        valeur_capitaux_propres = valeur_entreprise_ebitda + dette_nette
+        valeur_par_action_ebitda = valeur_capitaux_propres / actions
+
+        st.metric("Valeur par action (PER)", f"{valeur_par_action_per:.2f} {symbole}")
+        st.metric("Valeur par action (EV/EBITDA)", f"{valeur_par_action_ebitda:.2f} {symbole}")
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=["PER"], y=[valeur_par_action_per], name="PER"))
+        fig.add_trace(go.Bar(x=["EV/EBITDA"], y=[valeur_par_action_ebitda], name="EV/EBITDA"))
+        fig.update_layout(title="Valorisation par multiples", yaxis_title=f"{symbole} par action")
+        st.plotly_chart(fig)
+
+        df_ratios = pd.DataFrame({
+            "Méthode": ["PER", "EV/EBITDA"],
+            "Valeur par action": [valeur_par_action_per, valeur_par_action_ebitda]
+        })
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df_ratios.to_excel(writer, index=False, sheet_name="Ratios")
+        st.download_button(
+            label="📥 Exporter en Excel",
+            data=output.getvalue(),
+            file_name="Ratios_resultats.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
