@@ -7,6 +7,5 @@ xlsxwriter
 weasyprint
 html5lib
 tinycss2
-reportlab
 yfinance
 fpdf==1.7.2fpdf==1.7.2
