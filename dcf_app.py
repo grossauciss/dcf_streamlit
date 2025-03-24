@@ -4,11 +4,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import yfinance as yf
 import tempfile
-from fpdf import FPDF
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.pdfgen import canvas
 from datetime import datetime
 
 st.set_page_config(page_title="Analyse Financière PDF", layout="centered")
-st.title("📊 Analyse Financière avec Export PDF")
+st.title("📊 Analyse Financière avec Export PDF (Compatible)")
 
 devise = st.selectbox("Devise", ["€", "$", "CHF", "£"])
 symbole = {"€": "€", "$": "$", "CHF": "CHF", "£": "£"}[devise]
@@ -18,7 +20,6 @@ valeurs = {}
 fcf = ebitda = debt = shares = price = net_income = cours = score_final = 0
 info = {}
 
-# Récupération des données
 if ticker_input:
     try:
         ticker = yf.Ticker(ticker_input)
@@ -34,7 +35,6 @@ if ticker_input:
     except:
         st.error("Erreur lors de la récupération des données.")
 
-# Formulaire de calcul
 with st.form("formulaire"):
     fcf_input = st.number_input("FCF initial", value=fcf or 0.0)
     croissance = st.number_input("Croissance (%)", value=10.0) / 100
@@ -48,7 +48,6 @@ with st.form("formulaire"):
     ev_ebitda = st.number_input("EV/EBITDA", value=12.0)
     submit = st.form_submit_button("Calculer")
 
-# Résultats et score
 if submit:
     valeur_per = (benefice * per) / nb_actions
     valeur_ebitda = ((ebitda_input * ev_ebitda) + dette) / nb_actions
@@ -67,7 +66,6 @@ if submit:
         "EV/EBITDA": valeur_ebitda
     }
 
-    # Score
     scores = []
     for methode, val in valeurs.items():
         marge = (val - cours) / cours * 100
@@ -75,7 +73,6 @@ if submit:
         scores.append(score)
     score_final = round(sum(scores) / len(scores), 1)
 
-    # Résumé
     st.subheader("🧠 Résumé exécutif")
     commentaire = "L'entreprise semble "
     if score_final >= 85:
@@ -89,34 +86,34 @@ if submit:
     commentaire += f" Score global : **{score_final}/100**."
     st.markdown(commentaire)
 
-    # PDF
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Analyse de valorisation financière", ln=1, align="C")
-
-    pdf.set_font("Arial", "", 12)
-    pdf.ln(5)
-    pdf.multi_cell(0, 10, commentaire)
-
-    pdf.ln(5)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Synthèse des méthodes :", ln=1)
-    pdf.set_font("Arial", "", 12)
-    for k, v in valeurs.items():
-        pdf.cell(0, 10, f"{k} : {v:.2f} {symbole}", ln=1)
-
-    pdf.ln(5)
-    pdf.set_font("Arial", "I", 10)
-    pdf.cell(0, 10, f"Généré le {datetime.today().strftime('%d/%m/%Y')}", ln=1)
-
+    # Création du PDF avec reportlab
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    pdf.output(temp_file.name)
+    c = canvas.Canvas(temp_file.name, pagesize=A4)
+    width, height = A4
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(width / 2, height - 60, "Analyse de valorisation financière")
+
+    c.setFont("Helvetica", 11)
+    c.drawString(50, height - 100, f"Date : {datetime.today().strftime('%d/%m/%Y')}")
+    c.drawString(50, height - 120, "Résumé :")
+    c.setFont("Helvetica-Oblique", 10)
+    c.drawString(60, height - 140, commentaire.replace("**", ""))
+
+    y = height - 180
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(50, y, "Méthodes de valorisation :")
+    c.setFont("Helvetica", 11)
+    y -= 20
+    for k, v in valeurs.items():
+        c.drawString(60, y, f"{k} : {v:.2f} {symbole}")
+        y -= 18
+
+    c.setFont("Helvetica-Oblique", 9)
+    c.setFillColor(colors.grey)
+    c.drawString(50, 40, "Rapport généré automatiquement - à titre informatif")
+
+    c.save()
 
     with open(temp_file.name, "rb") as file:
-        btn = st.download_button(
-            label="📥 Télécharger le rapport PDF",
-            data=file,
-            file_name="analyse_valorisation.pdf",
-            mime="application/pdf"
-        )
+        st.download_button("📥 Télécharger le rapport PDF", file, file_name="analyse_valorisation.pdf", mime="application/pdf")
