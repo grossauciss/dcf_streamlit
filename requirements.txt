@@ -1,11 +1,4 @@
 streamlit
-plotly
 pandas
-jinja2
-pdfkit
-xlsxwriter
-weasyprint
-html5lib
-tinycss2
-yfinance
-matplotlib
+plotly
+openpyxl
